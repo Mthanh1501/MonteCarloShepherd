@@ -17,6 +17,7 @@ Chương trình bao gồm các thành phần chính sau:
 Explainable RL (XRL) – Cung cấp thông tin giải thích chi tiết về quyết định của rắn, giúp người dùng hiểu rõ cách thuật toán hoạt động.
 
 Cách điều khiển:
+
     Phím Space – Tăng tốc độ FPS và tốc độ học.
     Phím Enter – Tạm dừng trò chơi.
     Phím M – Kích hoạt chế độ tự động chơi.
