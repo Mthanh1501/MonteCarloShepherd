@@ -20,5 +20,5 @@ Cách điều khiển:
 
     Phím Space – Tăng tốc độ FPS và tốc độ học.
     Phím Enter – Tạm dừng trò chơi.
-    Phím M – Kích hoạt chế độ tự động chơi.
+    Phím M – Kích hoạt chế độ tự Điều khiển.
     Phím E – Xem giải thích chi tiết về lý do rắn chọn hướng di chuyển.
