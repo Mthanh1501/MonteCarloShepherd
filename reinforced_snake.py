@@ -1,4 +1,5 @@
 import pygame
+import matplotlib.pyplot as plt
 from montecarlo.brain import Brain
 from montecarlo.state import State
 from montecarlo.game.grid import Grid
@@ -8,7 +9,6 @@ from random import choices
 # Khởi tạo Pygame
 pygame.init()
 
-# Cửa sổ 1200x800: 800 cho trò chơi, 400 cho panel
 canvas = pygame.display.set_mode((1200, 800))
 pygame.display.set_caption("Shepherd Game with Explanation")
 
@@ -26,8 +26,44 @@ except pygame.error as e:
 
 FPS = 10
 
+# Biến để kiểm soát biểu đồ
+plot_shown = False
+
+# Danh sách lưu số bước khi bắt được cừu
+steps_to_reward = []
+
+def show_plot(steps_data):
+    """Hiển thị biểu đồ với trục x là lần bắt được cừu và trục y là số bước"""
+    global plot_shown
+    if not plot_shown:
+        plt.ion()  # Bật chế độ tương tác
+        plt.figure(figsize=(8, 5))  # Tạo figure mới nếu chưa có
+        plot_shown = True
+    else:
+        plt.clf()  # Xóa nội dung biểu đồ cũ
+    
+    # Vẽ biểu đồ mới
+    plt.xlabel("Lần bắt được cừu")
+    plt.ylabel("Số bước")
+    plt.title("Số bước để bắt được cừu qua từng lần")
+    plt.grid(True)
+    
+    plt.plot(range(len(steps_data)), steps_data, label="Steps", color='purple', marker='o', linestyle='None')  # Chỉ hiển thị điểm
+    plt.xlim(0, len(steps_data) - 1 if steps_data else 1)  # Giới hạn trục x dựa trên số lần
+    plt.ylim(0, max(steps_data) if steps_data else 1)  # Giới hạn trục y dựa trên số bước tối đa
+    plt.legend()
+    
+    plt.draw()  # Cập nhật biểu đồ
+    plt.pause(0.001)  # Đảm bảo biểu đồ được hiển thị ngay lập tức
+
+def hide_plot():
+    """Ẩn biểu đồ"""
+    global plot_shown
+    if plot_shown:
+        plt.close()
+        plot_shown = False
+
 def wrap_text(text, font, max_width):
-    """Chia văn bản thành các dòng sao cho vừa với max_width."""
     lines = []
     for line in text.split('\n'):
         words = line.split(' ')
@@ -45,31 +81,22 @@ def wrap_text(text, font, max_width):
     return lines
 
 def update_screen(explanation="", paused=False):
-    # print("Gọi update_screen, explanation:", explanation if explanation else "Rỗng")
-    # Vẽ panel giải thích
     pygame.draw.rect(canvas, (200, 200, 200), (800, 0, 400, 800))
-    
-    # Hiển thị giải thích
     if explanation:
         try:
             font = pygame.font.SysFont("timesnewroman", 24)
         except Exception as e:
             font = pygame.font.Font(None, 24)
-        
-        # Chia văn bản thành các dòng vừa với panel (rộng 400 pixel)
-        max_width = 380  # Để lại lề 10 pixel mỗi bên
+        max_width = 380
         lines = wrap_text(explanation, font, max_width)
         for i, line in enumerate(lines):
-            text = font.render(line, True, (0, 0, 0))  # Màu đen
+            text = font.render(line, True, (0, 0, 0))
             canvas.blit(text, (810, 10 + i * 25))
-    
-    # Hiển thị thông báo tạm dừng nếu paused = True
     if paused:
         font = pygame.font.SysFont("timesnewroman", 36)
-        pause_text = font.render("Đã tạm dừng - Nhấn Enter để tiếp tục", True, (255, 0, 0))  # Màu đỏ
-        canvas.blit(pause_text, (200, 350))  # Giữa khu vực trò chơi
-    
-    pygame.display.update()
+        pause_text = font.render("Đã tạm dừng - Nhấn Enter để tiếp tục", True, (255, 0, 0))
+        canvas.blit(pause_text, (200, 350))
+    pygame.display.flip()
     pygame.time.Clock().tick(FPS)
 
 grid = Grid(16, 800)
@@ -90,12 +117,14 @@ direction = Direction.RIGHT
 current_explanation = ""
 last_explanation = ""
 
+# Biến đếm bước
+step_count = 0
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN:
-            key_name = pygame.key.name(event.key)
             if event.key == pygame.K_SPACE:
                 FPS = 15000 if FPS == 10 else 10
             elif event.key == pygame.K_f:
@@ -108,12 +137,17 @@ while running:
                 show_explanation = not show_explanation
                 if show_explanation:
                     current_explanation = "Test: Giải thích đã bật\nNhấn E để tắt"
-                    # print("Explanation forced:", current_explanation)
                 else:
                     current_explanation = ""
                     last_explanation = ""
             elif event.key == pygame.K_RETURN:
-                paused = not paused
+                paused = not paused  # Enter chỉ tạm dừng hoặc tiếp tục
+                if not paused:
+                    hide_plot()  # Ẩn biểu đồ khi tiếp tục chơi
+            elif event.key == pygame.K_q:
+                if not paused:  # Nếu chưa tạm dừng, nhấn Q sẽ tạm dừng
+                    paused = True
+                show_plot(steps_to_reward)  # Hiển thị biểu đồ khi nhấn Q
             elif manual and not paused:
                 if event.key == pygame.K_a and direction != Direction.RIGHT:
                     direction = Direction.LEFT
@@ -124,8 +158,9 @@ while running:
                 elif event.key == pygame.K_s and direction != Direction.UP:
                     direction = Direction.DOWN
 
-    # Chỉ cập nhật logic trò chơi khi không tạm dừng
     if not paused:
+        step_count += 1  # Tăng số bước mỗi lần di chuyển
+
         if not manual:
             state = State(shepperd.get_sheep_direction(current_sheep), shepperd.get_queue_directions(past_positions[1:shepperd.sheeps], direction))
             if print_state:
@@ -136,14 +171,12 @@ while running:
                 if new_explanation != last_explanation:
                     current_explanation = new_explanation
                     last_explanation = new_explanation
-                    # print("Explanation updated (auto):", current_explanation)
         else:
             if show_explanation:
                 new_explanation = "Chế độ thủ công: Dùng A/W/D/S để di chuyển"
                 if new_explanation != last_explanation:
                     current_explanation = new_explanation
                     last_explanation = new_explanation
-                    # print("Explanation updated (manual):", current_explanation)
 
         past_directions.insert(0, direction)
         if len(past_directions) >= 100:
@@ -155,9 +188,13 @@ while running:
             past_positions.pop()
 
         if shepperd.x_cell == current_sheep.x_cell and shepperd.y_cell == current_sheep.y_cell:
+            # Khi bắt được cừu, lưu số bước
             current_sheep = Sheep(grid.random_cell(), grid.random_cell())
             shepperd.sheeps += 1
             brain.add_reward(50)
+            steps_to_reward.append(step_count)
+            # Reset lại số bước
+            step_count = 0
         else:
             brain.add_reward(-1)
 
@@ -167,6 +204,8 @@ while running:
                 current_sheep = Sheep(grid.random_cell(), grid.random_cell())
                 brain.add_reward(-300)
                 brain.evaluate()
+                # Reset lại số bước khi va chạm
+                step_count = 0
                 break
 
         past_positions.insert(0, (shepperd.x_cell, shepperd.y_cell))
@@ -174,14 +213,13 @@ while running:
         if print_policy:
             print(brain.current_policy)
 
-    # Vẽ giao diện
-    canvas.fill((255, 255, 255))  # Nền trắng cho khu vực trò chơi
+    canvas.fill((255, 255, 255))
     canvas.blit(shepperd_sprite, (grid.from_cell(shepperd.x_cell), grid.from_cell(shepperd.y_cell)))
     for i in range(0, shepperd.sheeps):
         canvas.blit(cheese_sprite, (grid.from_cell(past_positions[i + 1][0]), grid.from_cell(past_positions[i + 1][1])))
     canvas.blit(sheep_sprite, (grid.from_cell(current_sheep.x_cell), grid.from_cell(current_sheep.y_cell)))
 
-    # Cập nhật màn hình
     update_screen(current_explanation, paused)
 
 pygame.quit()
+hide_plot()  # Đảm bảo đóng biểu đồ khi thoát

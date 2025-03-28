@@ -10,7 +10,8 @@ class Brain:
         self.rewards = {}
         self.history = []
         self.gamma = gamma
-
+        self.reward_history = []
+    
     def choose_direction(self, state, current_direction) -> Direction:
         direction = self.current_policy.get_action(state, current_direction)
         self.history.append([StateAction(state, direction), 0])
@@ -52,6 +53,9 @@ class Brain:
 
     def add_reward(self, reward):
         self.history[-1][1] = reward
+        self.reward_history.append(reward)  # Thêm vào lịch sử phần thưởng
+        if len(self.reward_history) > 1000:  # Giới hạn kích thước
+            self.reward_history.pop(0)
 
     def evaluate(self):
         for i in range(0, len(self.history)):

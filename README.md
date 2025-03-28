@@ -21,3 +21,4 @@ Cách điều khiển:
     Phím Enter – Tạm dừng trò chơi.
     Phím M – Kích hoạt chế độ tự động chơi.
     Phím E – Xem giải thích chi tiết về lý do rắn chọn hướng di chuyển.
+    Phím Q - xem biểu đồ số bước từng lần bắt được cừu
