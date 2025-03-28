@@ -1,7 +1,7 @@
-## ReinforcedSnake – Học Tăng Cường với XRL trong Trò Chơi Rắn Săn Mồi
+## ReinforcedShepherd Game – Học Tăng Cường với XRL trong Trò Chơi Bắt cừu
 # Giới thiệu
 
-ReinforcedSnake là một trò chơi Rắn săn mồi được triển khai bằng PyGame, sử dụng học tăng cường (Reinforcement Learning - RL) kết hợp với Học Tăng Cường Giải Thích được (Explainable Reinforcement Learning - XRL).
+ReinforcedSnake là một trò chơi Bắt cừu được triển khai bằng PyGame, sử dụng học tăng cường (Reinforcement Learning - RL) kết hợp với Học Tăng Cường Giải Thích được (Explainable Reinforcement Learning - XRL).
 
 Chương trình áp dụng Monte Carlo Control để điều chỉnh chính sách di chuyển của rắn, giúp nó tự học cách né tránh chính mình và tối ưu hóa hành vi săn thức ăn. Khi tần số khám phá (exploration rate) giảm về 0, rắn sẽ chơi hoàn hảo bằng cách sử dụng chính sách đã học được.
 
