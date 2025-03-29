@@ -53,9 +53,9 @@ class Brain:
 
     def add_reward(self, reward):
         self.history[-1][1] = reward
-        self.reward_history.append(reward)  # Thêm vào lịch sử phần thưởng
-        if len(self.reward_history) > 1000:  # Giới hạn kích thước
-            self.reward_history.pop(0)
+        # self.reward_history.append(reward)  # Thêm vào lịch sử phần thưởng
+        # if len(self.reward_history) > 1000:  # Giới hạn kích thước
+        #     self.reward_history.pop(0)
 
     def evaluate(self):
         for i in range(0, len(self.history)):
