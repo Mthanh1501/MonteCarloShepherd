@@ -1,7 +1,11 @@
 import random
+import numpy as np
+import shap
 from .policy import Policy
-from .state import StateAction
+from .state import State, StateAction
 from .game.direction import ComplexDirection, Direction
+from contextlib import redirect_stdout, redirect_stderr
+import io
 
 class Brain:
     def __init__(self, gamma):
@@ -11,51 +15,103 @@ class Brain:
         self.history = []
         self.gamma = gamma
         self.reward_history = []
-    
+        self.state_history = []
+        self.action_history = []
+
     def choose_direction(self, state, current_direction) -> Direction:
         direction = self.current_policy.get_action(state, current_direction)
         self.history.append([StateAction(state, direction), 0])
+        self.state_history.append(self._state_to_vector(state))
+        self.action_history.append(direction)
         return direction
 
-    def explain_action(self, state, action, current_direction):
-        available = current_direction.get_available()
-        # Loại bỏ tiền tố Direction. và ComplexDirection.
-        action_str = str(action).replace("Direction.", "")
-        sheep_direction_str = str(state.sheep_direction).replace("ComplexDirection.", "")
+    def _state_to_vector(self, state):
+        """Chuyển trạng thái thành vector để SHAP xử lý, xử lý trường hợp None"""
+        if state.sheep_direction is None:
+            # Gán giá trị mặc định nếu sheep_direction là None
+            sheep_dir_idx = list(ComplexDirection).index(ComplexDirection.RIGHT)  # Mặc định là RIGHT
+        else:
+            sheep_dir_idx = list(ComplexDirection).index(state.sheep_direction)
         
-        base_info = "Chọn hướng: {}\nVị trí cừu: {}\nHướng bị chặn: {}\nMức độ Khám phá: {:.3f}".format(
-            action_str,
-            sheep_direction_str,
-            state.facing_queue,
-            self.current_policy.exploration
-        )
+        facing_queue_str = "".join([str(list(Direction).index(d)) for d in state.facing_queue])
+        facing_queue_val = int(facing_queue_str) if facing_queue_str else 0
+        return np.array([sheep_dir_idx, facing_queue_val])
 
-        if state not in self.current_policy.policy:
-            return base_info + "\nLựa chọn: Ngẫu nhiên vì chưa có chính sách\nLý do: Chưa có dữ liệu để đánh giá hướng đi"
+    def _predict_policy(self, states):
+        """Hàm dự đoán hướng từ trạng thái cho SHAP"""
+        actions = []
+        for state_vec in states:
+            sheep_dir = ComplexDirection(list(ComplexDirection)[int(state_vec[0])])
+            facing_queue = set()
+            if state_vec[1] > 0:
+                fq_str = str(int(state_vec[1]))
+                facing_queue = {Direction(int(d)) for d in fq_str}
+            state = State(sheep_dir, facing_queue)
+            action = self.current_policy.get_action(state, Direction.RIGHT)
+            actions.append(list(Direction).index(action))
+        return np.array(actions)
 
-        if random.random() < self.current_policy.exploration:
-            return base_info + "\nLựa chọn: Khám phá\nLý do: Thử nghiệm hướng mới để tìm phần thưởng tốt hơn"
+    def _interpret_shap_values(self, shap_values, state, action, current_direction):
+        """Diễn giải giá trị SHAP thành câu trả lời tự nhiên"""
+        sheep_dir_str = str(state.sheep_direction if state.sheep_direction else "Unknown").replace("ComplexDirection.", "")
+        facing_queue_str = " ".join([str(d).replace("Direction.", "") for d in state.facing_queue]) or "None"
+        action_str = str(action).replace("Direction.", "")
+        current_dir_str = str(current_direction).replace("Direction.", "")
 
-        reward_dict = self.rewards.get(state, {})
-        reward_info = []
-        for direction in available:
-            reward = reward_dict.get(direction, {}).get("reward", 0)
-            direction_str = str(direction).replace("Direction.", "")
-            reward_info.append(f"{direction_str}: {reward:.2f}")
-        best_reward = reward_dict.get(action, {}).get("reward", 0)
-        explanation = (
-            base_info +
-            "\nPhần thưởng: {:.2f}".format(best_reward) +
-            "\nPhần thưởng các hướng: " + ", ".join(reward_info) +
-            "\nLý do: Hướng này có phần thưởng cao nhất"
-        )
+        shap_sheep = shap_values[0]
+        shap_queue = shap_values[1]
+
+        explanation = f"Người chăn cừu chọn hướng {action_str} vì:\n"
+        if abs(shap_sheep) > 0.1:
+            if shap_sheep > 0:
+                explanation += f"- Cừu ở hướng {sheep_dir_str} khuyến khích di chuyển sang {action_str} (ảnh hưởng: {shap_sheep:+.2f}).\n"
+            else:
+                explanation += f"- Cừu ở hướng {sheep_dir_str} không khuyến khích {action_str}, nhưng các yếu tố khác mạnh hơn (ảnh hưởng: {shap_sheep:+.2f}).\n"
+        else:
+            explanation += f"- Hướng của cừu ({sheep_dir_str}) không ảnh hưởng nhiều đến quyết định này (ảnh hưởng: {shap_sheep:+.2f}).\n"
+
+        if abs(shap_queue) > 0.1:
+            if shap_queue > 0:
+                explanation += f"- Các hướng bị chặn ({facing_queue_str}) hỗ trợ việc chọn {action_str} (ảnh hưởng: {shap_queue:+.2f}).\n"
+            else:
+                explanation += f"- Các hướng bị chặn ({facing_queue_str}) cản trở {action_str}, nhưng không đủ mạnh (ảnh hưởng: {shap_queue:+.2f}).\n"
+        else:
+            explanation += f"- Các hướng bị chặn ({facing_queue_str}) không ảnh hưởng đáng kể (ảnh hưởng: {shap_queue:+.2f}).\n"
+
+        explanation += f"- Hướng hiện tại là {current_dir_str}, giúp việc chuyển sang {action_str} hợp lý hơn.\n"
+        return explanation
+
+    def explain_action(self, state, action, current_direction):
+        """Giải thích hành động bằng SHAP, thêm Exploration rate và tắt tqdm"""
+        action_str = str(action).replace("Direction.", "")
+        sheep_direction_str = str(state.sheep_direction if state.sheep_direction else "Unknown").replace("ComplexDirection.", "")
+        facing_queue_str = " ".join([str(d).replace("Direction.", "") for d in state.facing_queue])
+
+        if not self.state_history:
+            return f"Chọn hướng: {action_str}\nKhông đủ dữ liệu để giải thích SHAP."
+
+        background_data = np.array(self.state_history[-100:])
+        current_state_vec = self._state_to_vector(state).reshape(1, -1)
+
+        explainer = shap.KernelExplainer(self._predict_policy, background_data)
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            shap_values = explainer.shap_values(current_state_vec, nsamples=50)
+
+        exploration_rate = f"Exploration rate: {self.current_policy.exploration:.3f}"
+
+        explanation = f"Chọn hướng: {action_str}\n"
+        explanation += f"Sheep Direction: {sheep_direction_str}\n"
+        explanation += f"Facing Queue: {facing_queue_str if facing_queue_str else 'None'}\n"
+        explanation += f"{exploration_rate}\n"
+        explanation += "Giải thích SHAP:\n"
+        explanation += f"- Sheep Direction: {shap_values[0][0]:+.2f}\n"
+        explanation += f"- Facing Queue: {shap_values[0][1]:+.2f}\n"
+        explanation += "\n" + self._interpret_shap_values(shap_values[0], state, action, current_direction)
+
         return explanation
 
     def add_reward(self, reward):
         self.history[-1][1] = reward
-        # self.reward_history.append(reward)  # Thêm vào lịch sử phần thưởng
-        # if len(self.reward_history) > 1000:  # Giới hạn kích thước
-        #     self.reward_history.pop(0)
 
     def evaluate(self):
         for i in range(0, len(self.history)):

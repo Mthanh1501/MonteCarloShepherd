@@ -1,4 +1,6 @@
 import pygame
+import matplotlib
+matplotlib.use('Qt5Agg')  # Chuyển sang Qt5Agg để tránh lỗi Tkinter
 import matplotlib.pyplot as plt
 from montecarlo.brain import Brain
 from montecarlo.state import State
@@ -35,33 +37,31 @@ steps_to_reward = []
 def show_plot(steps_data):
     """Hiển thị biểu đồ với trục x là lần bắt được cừu và trục y là số bước"""
     global plot_shown
-    if not plot_shown:
-        plt.ion()  # Bật chế độ tương tác
-        plt.figure(figsize=(8, 5))  # Tạo figure mới nếu chưa có
+    if steps_data:  # Chỉ vẽ nếu có dữ liệu
+        plt.figure(figsize=(8, 5))
+        plt.xlabel("Lần bắt được cừu")
+        plt.ylabel("Số bước")
+        plt.title("Số bước để bắt được cừu qua từng lần")
+        plt.grid(True)
+        plt.plot(range(len(steps_data)), steps_data, label="Steps", color='purple', marker='o', linestyle='None')
+        plt.xlim(0, max(len(steps_data) - 1, 0))
+        plt.ylim(0, max(steps_data) if steps_data else 1)
+        plt.legend()
+        plt.show(block=False)
+        plt.pause(0.01)  # Đảm bảo biểu đồ hiển thị
         plot_shown = True
     else:
-        plt.clf()  # Xóa nội dung biểu đồ cũ
-    
-    # Vẽ biểu đồ mới
-    plt.xlabel("Lần bắt được cừu")
-    plt.ylabel("Số bước")
-    plt.title("Số bước để bắt được cừu qua từng lần")
-    plt.grid(True)
-    
-    plt.plot(range(len(steps_data)), steps_data, label="Steps", color='purple', marker='o', linestyle='None')  # Chỉ hiển thị điểm
-    plt.xlim(0, len(steps_data) - 1 if steps_data else 1)  # Giới hạn trục x dựa trên số lần
-    plt.ylim(0, max(steps_data) if steps_data else 1)  # Giới hạn trục y dựa trên số bước tối đa
-    plt.legend()
-    
-    plt.draw()  # Cập nhật biểu đồ
-    plt.pause(0.001)  # Đảm bảo biểu đồ được hiển thị ngay lập tức
+        print("Không có dữ liệu để hiển thị biểu đồ. Hãy bắt cừu trước!")
 
 def hide_plot():
-    """Ẩn biểu đồ"""
+    """Đóng biểu đồ một cách an toàn"""
     global plot_shown
     if plot_shown:
-        plt.close()
-        plot_shown = False
+        try:
+            plt.close('all')
+            plot_shown = False
+        except Exception as e:
+            print("Lỗi khi đóng biểu đồ:", e)
 
 def wrap_text(text, font, max_width):
     lines = []
@@ -136,18 +136,19 @@ while running:
             elif event.key == pygame.K_e:
                 show_explanation = not show_explanation
                 if show_explanation:
-                    current_explanation = "Test: Giải thích đã bật\nNhấn E để tắt"
+                    current_explanation = "Giải thích SHAP đã bật\nNhấn E để tắt"
                 else:
                     current_explanation = ""
                     last_explanation = ""
-            elif event.key == pygame.K_RETURN:
-                paused = not paused  # Enter chỉ tạm dừng hoặc tiếp tục
-                if not paused:
-                    hide_plot()  # Ẩn biểu đồ khi tiếp tục chơi
-            elif event.key == pygame.K_q:
-                if not paused:  # Nếu chưa tạm dừng, nhấn Q sẽ tạm dừng
+            elif event.key == pygame.K_RETURN:  # Tạm dừng/tiếp tục
+                if paused:
+                    paused = False
+                    hide_plot()  # Đóng biểu đồ khi tiếp tục
+                else:
                     paused = True
-                show_plot(steps_to_reward)  # Hiển thị biểu đồ khi nhấn Q
+            elif event.key == pygame.K_q :  # Hiển thị biểu đồ và tạm dừng
+                paused = True
+                show_plot(steps_to_reward)
             elif manual and not paused:
                 if event.key == pygame.K_a and direction != Direction.RIGHT:
                     direction = Direction.LEFT
@@ -159,9 +160,11 @@ while running:
                     direction = Direction.DOWN
 
     if not paused:
-        step_count += 1  # Tăng số bước mỗi lần di chuyển
+        step_count += 1
 
         if not manual:
+            if current_sheep is None:  # Kiểm tra None
+                current_sheep = Sheep(grid.random_cell(), grid.random_cell())
             state = State(shepperd.get_sheep_direction(current_sheep), shepperd.get_queue_directions(past_positions[1:shepperd.sheeps], direction))
             if print_state:
                 print(state)
@@ -188,13 +191,12 @@ while running:
             past_positions.pop()
 
         if shepperd.x_cell == current_sheep.x_cell and shepperd.y_cell == current_sheep.y_cell:
-            # Khi bắt được cừu, lưu số bước
             current_sheep = Sheep(grid.random_cell(), grid.random_cell())
             shepperd.sheeps += 1
             brain.add_reward(50)
             steps_to_reward.append(step_count)
-            # Reset lại số bước
             step_count = 0
+            # print(f"Số bước để bắt cừu: {steps_to_reward[-1]}, Tổng: {steps_to_reward}")  # Debug
         else:
             brain.add_reward(-1)
 
@@ -204,7 +206,6 @@ while running:
                 current_sheep = Sheep(grid.random_cell(), grid.random_cell())
                 brain.add_reward(-300)
                 brain.evaluate()
-                # Reset lại số bước khi va chạm
                 step_count = 0
                 break
 
