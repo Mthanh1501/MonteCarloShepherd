@@ -16,7 +16,6 @@ class State:
         self.sheep_direction = sheep_direction
         self.facing_queue = facing_queue
 
-
     def as_attack(self):
         return State(self.sheep_direction, set())
     

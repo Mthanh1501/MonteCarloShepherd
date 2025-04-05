@@ -19,8 +19,6 @@ class Shepperd:
         self.grid = grid
         self.sheeps = 0
 
-  
-
     def move(self, direction: Direction):
         if (direction == Direction.DOWN):
             self.y_cell = (self.y_cell + self.speed) % (self.grid.grid_side)
@@ -30,8 +28,6 @@ class Shepperd:
             self.x_cell = (self.x_cell - self.speed) % (self.grid.grid_side)
         elif (direction == Direction.RIGHT):
             self.x_cell = (self.x_cell + self.speed) % (self.grid.grid_side)
-
-    
 
     def get_sheep_direction(self, sheep: Sheep):
         if (self.x_cell < sheep.x_cell):
@@ -54,9 +50,7 @@ class Shepperd:
             elif (self.y_cell > sheep.y_cell):
                 return ComplexDirection.UP
 
-
     def get_queue_directions(self, positions, current_direction: Direction):
-        
         directions = set()
 
         #print(positions)

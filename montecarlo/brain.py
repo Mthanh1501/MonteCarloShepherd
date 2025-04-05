@@ -128,7 +128,7 @@ class Brain:
     #     return explanation
 
     def explain_action(self, state, action, current_direction):
-        """Giải thích hành động của người chăn cừu bằng SHAP một cách tự nhiên và hợp lý"""
+        """Giải thích hành động của người chăn cừu bằng SHAP """
         # Chuẩn bị thông tin cơ bản
         action_str = str(action).replace("Direction.", "")
         sheep_dir_str = str(state.sheep_direction if state.sheep_direction else "Không xác định").replace("ComplexDirection.", "")
