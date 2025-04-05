@@ -52,33 +52,50 @@ class Brain:
         return np.array(actions)
 
     def _interpret_shap_values(self, shap_values, state, action, current_direction):
-        """Diễn giải giá trị SHAP thành câu trả lời tự nhiên"""
-        sheep_dir_str = str(state.sheep_direction if state.sheep_direction else "Unknown").replace("ComplexDirection.", "")
-        facing_queue_str = " ".join([str(d).replace("Direction.", "") for d in state.facing_queue]) or "None"
+        """Giải thích chi tiết tại sao người chăn cừu chọn hướng này, kể cả khi đi ngẫu nhiên."""
+        # Chuẩn bị thông tin
+        sheep_dir_str = str(state.sheep_direction if state.sheep_direction else "Không rõ").replace("ComplexDirection.", "")
+        facing_queue_str = " ".join([str(d).replace("Direction.", "") for d in state.facing_queue]) or "Không có"
         action_str = str(action).replace("Direction.", "")
-        current_dir_str = str(current_direction).replace("Direction.", "")
 
-        shap_sheep = shap_values[0]
-        shap_queue = shap_values[1]
+        # Giá trị SHAP
+        shap_sheep = shap_values[0]  # Ảnh hưởng từ hướng cừu
+        shap_queue = shap_values[1]  # Ảnh hưởng từ chướng ngại
 
-        explanation = f"Người chăn cừu chọn hướng {action_str} vì:\n"
-        if abs(shap_sheep) > 0.1:
-            if shap_sheep > 0:
-                explanation += f"- Cừu ở hướng {sheep_dir_str} khuyến khích di chuyển sang {action_str} (ảnh hưởng: {shap_sheep:+.2f}).\n"
-            else:
-                explanation += f"- Cừu ở hướng {sheep_dir_str} không khuyến khích {action_str}, nhưng các yếu tố khác mạnh hơn (ảnh hưởng: {shap_sheep:+.2f}).\n"
+        # Kiểm tra tỷ lệ đi ngẫu nhiên từ Policy
+        exploration_rate = self.current_policy.exploration  # Giả sử Policy có thuộc tính này
+        is_random = exploration_rate > 0.5  # Ngẫu nhiên nếu tỷ lệ khám phá cao (có thể điều chỉnh ngưỡng)
+
+        # Bắt đầu giải thích
+        explanation = f"Người chăn cừu chọn hướng {action_str}:\n"
+
+        # Thêm thông tin ngẫu nhiên nếu có
+        if is_random:
+            explanation += f"- Lần này hướng {action_str} được chọn ngẫu nhiên (tỷ lệ khám phá: {exploration_rate:.2f}).\n"
         else:
-            explanation += f"- Hướng của cừu ({sheep_dir_str}) không ảnh hưởng nhiều đến quyết định này (ảnh hưởng: {shap_sheep:+.2f}).\n"
+            explanation += f"- Hướng {action_str} được chọn dựa trên đánh giá tình huống.\n"
 
-        if abs(shap_queue) > 0.1:
-            if shap_queue > 0:
-                explanation += f"- Các hướng bị chặn ({facing_queue_str}) hỗ trợ việc chọn {action_str} (ảnh hưởng: {shap_queue:+.2f}).\n"
+        # Giải thích chi tiết từ hướng cừu (luôn thực hiện)
+        if shap_sheep > 0:
+            explanation += f"- Cừu ở hướng {sheep_dir_str} khiến {action_str} là lựa chọn tốt.\n"
+            # Kiểm tra nếu ăn cừu hoặc gần cừu
+            if action_str == sheep_dir_str:  # Giả sử action trùng hướng cừu là "ăn cừu"
+                explanation += f"- Người chăn cừu chọn ăn cừu.\n"
             else:
-                explanation += f"- Các hướng bị chặn ({facing_queue_str}) cản trở {action_str}, nhưng không đủ mạnh (ảnh hưởng: {shap_queue:+.2f}).\n"
+                explanation += f"- Di chuyển tới {action_str} vì gần cừu hơn.\n"
+        elif shap_sheep < 0:
+            explanation += f"- Mặc dù cừu ở {sheep_dir_str} không ủng hộ, các yếu tố khác mạnh hơn.\n"
         else:
-            explanation += f"- Các hướng bị chặn ({facing_queue_str}) không ảnh hưởng đáng kể (ảnh hưởng: {shap_queue:+.2f}).\n"
+            explanation += f"- Hướng cừu ({sheep_dir_str}) không ảnh hưởng nhiều.\n"
 
-        explanation += f"- Hướng hiện tại là {current_dir_str}, giúp việc chuyển sang {action_str} hợp lý hơn.\n"
+        # Giải thích chi tiết từ chướng ngại (luôn thực hiện)
+        if shap_queue > 0:
+            explanation += f"- Các hướng bị chặn ({facing_queue_str}) đẩy người chăn cừu sang {action_str}.\n"
+        elif shap_queue < 0:
+            explanation += f"- Dù chướng ngại ({facing_queue_str}) cản trở, {action_str} vẫn được chọn.\n"
+        else:
+            explanation += f"- Chướng ngại ({facing_queue_str}) không tác động đáng kể.\n"
+
         return explanation
 
     def explain_action(self, state, action, current_direction):

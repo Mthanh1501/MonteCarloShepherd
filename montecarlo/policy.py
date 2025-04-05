@@ -21,7 +21,6 @@ class Policy:
             return choices(available)[0]
         
     
-        
     
     def improve(self, rewards):
         for state in rewards.keys():
@@ -40,8 +39,6 @@ class Policy:
                     isUniformDistribution = False
                 elif (average_reward < best_reward):
                     isUniformDistribution = False
-# 2
-# hien thi giai thich
             if (not isUniformDistribution):
                 self.policy[state] = best_action
         if (self.exploration > 0):
